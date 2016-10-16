@@ -1,0 +1,856 @@
+﻿<#@ template language="C#" HostSpecific="True" Debug="True" #>
+<#@ output extension="cs" #>
+<#@ assembly name="System.ComponentModel.DataAnnotations" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data.Entity" #>
+<#@ assembly name="System.Data.Linq" #>
+<#@ assembly name="EnvDTE" #>
+<#@ ScaffoldingAssembly Processor="ScaffoldingAssemblyLoader" #>
+<#
+var routePrefix = String.Empty;
+if (!String.IsNullOrWhiteSpace(AreaName)) {
+    routePrefix = "/" + AreaName;
+}
+routePrefix += "/" + ControllerRootName + "/";
+#>
+<#@ import namespace="System.Collections" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="Microsoft.AspNet.Scaffolding.Core.Metadata" #>
+<#@ parameter type="System.String" name="ControllerName" #>
+<#@ parameter type="System.String" name="ControllerRootName" #>
+<#@ parameter type="System.String" name="Namespace" #>
+<#@ parameter type="System.String" name="AreaName" #>
+<#@ parameter type="System.String" name="ContextTypeName" #>
+<#@ parameter type="System.String" name="ModelTypeName" #>
+<#@ parameter type="System.String" name="ModelVariable" #>
+<#@ parameter type="Microsoft.AspNet.Scaffolding.Core.Metadata.ModelMetadata" name="ModelMetadata" #>
+<#@ parameter type="System.Boolean" name="UseAsync" #>
+<#@ parameter type="System.Boolean" name="IsOverpostingProtectionRequired" #>
+<#@ parameter type="System.String" name="BindAttributeIncludeText" #>
+<#@ parameter type="System.String" name ="OverpostingWarningMessage" #>
+<#@ parameter type="System.Collections.Generic.HashSet<System.String>" name="RequiredNamespaces" #>
+using System;
+using System.Web;
+using System.Collections.Generic;
+using System.Data.Entity;
+using System.Linq;
+<# if (UseAsync) { #>
+using System.Threading.Tasks;
+<# } #>
+using System.Web.Mvc;
+using AutoMapper;
+using JqGridHelper.Models;
+using JqGridHelper.DynamicSearch;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Service.Contracts;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.ViewModels;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Models;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.DataLayer;	
+//using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Rtwo;
+//using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.PdfReports;
+using System.Linq.Dynamic;
+
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Controllers;
+<# foreach (var namespaceName in RequiredNamespaces) { #>
+using <#= namespaceName #>;
+<# } #>
+using Microsoft.AspNet.Identity;
+namespace <#= Namespace #>
+{
+<#
+    var contextTypeName = ContextTypeName;
+    var entitySetName = ModelMetadata.EntitySetName;
+    var entitySetVariable = entitySetName.ToLowerInvariant();
+    var primaryKeyName = ModelMetadata.PrimaryKeys[0].PropertyName;
+    var primaryKeyShortTypeName = ModelMetadata.PrimaryKeys[0].ShortTypeName;
+    var primaryKeyDefaultValue = ModelMetadata.PrimaryKeys[0].DefaultValue;
+    var primaryKeyType = ModelMetadata.PrimaryKeys[0].TypeName;
+    var primaryKeyNullableTypeName = GetNullableTypeName(primaryKeyType, primaryKeyShortTypeName);
+    var lambdaVar = ModelVariable[0];
+    var relatedProperties = ModelMetadata.RelatedEntities.ToDictionary(item => item.AssociationPropertyName);
+	var HasOrder=0;
+	var HasAnyUniqe=0;
+    string bindAttribute;
+    if (IsOverpostingProtectionRequired)
+    {
+        bindAttribute = String.Format("[Bind(Include=\"{0}\")] ", BindAttributeIncludeText);
+    }
+    else
+    {
+        bindAttribute = String.Empty;
+    }
+	bindAttribute =bindAttribute.Replace(",Status",string.Empty).Replace(",UserId",string.Empty).Replace(",VisitCount",string.Empty);
+	bindAttribute =bindAttribute.Replace(",RecordState",string.Empty).Replace(",DeleteDate",string.Empty);
+	
+	var includeExpressions = "";
+        includeExpressions = String.Join("", relatedProperties.Values.Select(property => String.Format(".Include({0} => {0}.{1})", lambdaVar, property.AssociationPropertyName)));
+#>
+	 //[CustomAuthorizeAttribute]
+    public class <#= ControllerName #> :  BaseAdminController
+    {
+        
+		#region Fields
+       
+	
+	
+	    private readonly IUnitOfWork _unitOfWork;
+        private readonly I<#= ModelTypeName #>Service _<#= ModelTypeName #>Service;
+        private readonly IMappingEngine _mappingEngine;
+
+       
+
+
+		<# foreach (var property in relatedProperties.Values) 
+		{
+		if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")&&(property.EntitySetName!="ManagerGallery")&&(property.ForeignKeyPropertyNames[0] !="UserId"))
+		{#>
+			private readonly I<#= property.EntitySetName #>Service _<#= property.EntitySetName #>Service;			
+		<# } 
+		} #>
+
+
+        #endregion
+
+
+		#region Constructors
+ 
+
+        public <#= ControllerName #>(IUnitOfWork unitOfWork,I<#= ModelTypeName #>Service <#= ModelTypeName #>Service, IMappingEngine mappingEngine
+		<# foreach (var property in relatedProperties.Values) 
+		{
+		if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")&&(property.EntitySetName!="ManagerGallery")&&(property.ForeignKeyPropertyNames[0] !="UserId"))
+		{#>
+			, I<#= property.EntitySetName #>Service <#= property.EntitySetName #>Service
+		<# } 
+		} #>
+		)
+        {
+			this._unitOfWork = unitOfWork;
+			this._mappingEngine = mappingEngine;
+            this._<#= ModelTypeName #>Service = <#= ModelTypeName #>Service;
+			<# foreach (var property in relatedProperties.Values) 
+		{
+		if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")&&(property.EntitySetName!="ManagerGallery")&&(property.ForeignKeyPropertyNames[0] !="UserId"))
+		{#>
+			this._<#= property.EntitySetName #>Service =<#= property.EntitySetName #>Service;
+		<# } 
+		} #>
+        }
+        #endregion
+
+		#region Actions
+
+		public ActionResult Index()
+        {
+            return View();
+        }
+
+       
+
+
+
+		 [HttpPost]		 
+<# if (UseAsync) { #>
+         public async Task<ActionResult> Index(string SelectedRowID, string action)
+<# } else { #>
+		 public ActionResult Index(string SelectedRowID,string action)
+<# } #>
+        {
+				if (string.IsNullOrEmpty(SelectedRowID))
+				{
+					Warning(string.Format(AdakCMS5.Resource.Text.NoRecordSelected, AdakCMS5.Resource.Text.<#= ModelTypeName #>));
+					return View();
+				}
+				List<<#= primaryKeyShortTypeName #>> SelectedID=new List<<#= primaryKeyShortTypeName #>>();
+                foreach(string id in SelectedRowID.Split(','))
+                {
+                    try{SelectedID.Add(<#= primaryKeyShortTypeName #>.Parse(id));}
+                    catch{}
+                }
+				if (SelectedID.Count<1)
+            {
+               Warning(string.Format(AdakCMS5.Resource.Text.NoRecordSelected, AdakCMS5.Resource.Text.<#= ModelTypeName #>));
+                return View();
+            }
+
+			switch(action )
+            {
+                case "Delete":				 
+                    _<#= ModelTypeName #>Service.Delete<#= ModelTypeName #>s(SelectedID);                    
+                    _unitOfWork.SaveAllChangesAsync();
+                    Success(string.Format(AdakCMS5.Resource.Text.DeletedSuccess, AdakCMS5.Resource.Text.<#= ModelTypeName #>), true);
+                    break;
+            }	
+            return View();
+        }
+
+		#endregion 
+		
+		
+		
+		#region DataEntry
+        public async Task<ActionResult> Create()
+        {
+	<# foreach (var property in relatedProperties.Values) {
+	if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")&&(property.EntitySetName!="ManagerGallery")&&(property.ForeignKeyPropertyNames[0] !="UserId")){#>
+		var <#= property.EntitySetName #> =await _<#= property.EntitySetName #>Service.GetAllForDropDown();
+            if (<#= property.EntitySetName #>.Count() < 1)
+            {				
+                Danger(string.Format(AdakCMS5.Resource.Text.ForeignKeyNotFound, AdakCMS5.Resource.Text.<#= ModelTypeName #>, AdakCMS5.Resource.Text.<#= property.EntitySetName #>), true);                
+			    return RedirectToAction("Index",  new { area = "<#= AreaName #>" });
+			}
+            ViewBag.<#= property.ForeignKeyPropertyNames[0] #> = new SelectList(<#= property.EntitySetName #>, "<#= property.PrimaryKeyNames[0] #>", "<#= property.DisplayPropertyName #>");
+<# } } #>
+            return View();
+        }
+
+
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+<# if (UseAsync) { #>
+        public async Task<ActionResult> Create( <#= ModelTypeName #>InsertViewModel InsertedRecord)
+<# } else { #>
+        public ActionResult Create(<#= ModelTypeName #>InsertViewModel InsertedRecord)
+<# } #>
+        {
+		<# if(!String.IsNullOrEmpty(primaryKeyType) && String.Equals("System.Guid", primaryKeyType, StringComparison.OrdinalIgnoreCase)) 
+				{ #>
+                InsertedRecord.<#= primaryKeyName #> = Guid.NewGuid();
+			 <# } #>
+			 <# foreach (PropertyMetadata propertey in ModelMetadata.Properties) 
+	{
+		if (propertey.PropertyName.StartsWith("Uni"))
+                {
+				HasAnyUniqe=1;
+				#>
+			if (_<#= ModelTypeName #>Service.AnyUniqe("<#= propertey.PropertyName #>",InsertedRecord.<#= propertey.PropertyName #>.Tostring()))
+            {
+				Danger(string.Format(AdakCMS5.Resource.Text.IsDuplicate, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.<#= propertey.PropertyName #>)), true);
+                return View(InsertedRecord);
+            }
+	<#  } else if (propertey.PropertyName=="VisitUrl")
+	{
+	HasAnyUniqe=1;
+	 #>
+				if (_<#= ModelTypeName #>Service.AnyUniqe("<#= propertey.PropertyName #>",InsertedRecord.<#= propertey.PropertyName #>.Tostring()))
+                {
+					Danger(string.Format(AdakCMS5.Resource.Text.IsDuplicate, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.<#= propertey.PropertyName #>)), true);
+                    return View(InsertedRecord);
+                }
+				<#
+				}  
+				else if (propertey.PropertyName.StartsWith("RegisterUserId")){ #>
+				 InsertedRecord.propertey.PropertyName=User.Identity.GetUserId();				
+				<#
+				}
+				} #>	
+
+				 var NewRecord = new <#= ModelTypeName #>();
+            {
+            };
+            _mappingEngine.Map(InsertedRecord, NewRecord);
+
+		 
+		<# 
+		string d="";
+		foreach (var property in relatedProperties.Values) {
+		if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users"))
+		{
+			if(property.EntitySetName!="ManagerGallery")
+			{#>
+			ViewBag.<#= property.ForeignKeyPropertyNames[0] #> = new SelectList(await _<#= property.EntitySetName #>Service.GetAllForDropDown(), "<#= property.PrimaryKeyNames[0] #>", "<#= property.DisplayPropertyName #>", InsertedRecord.<#= property.ForeignKeyPropertyNames[0] #>);
+		    <# }
+		 } else
+d=property.ForeignKeyPropertyNames[0];
+ } #>
+
+			<# if(!string.IsNullOrEmpty(d)){ #>
+			try{ModelState["<#= d #>"].Errors.Clear();}catch { }
+			<# } #>
+if (ModelState.IsValid)
+            {
+			     
+				_<#= ModelTypeName #>Service.Add<#= ModelTypeName #>(NewRecord);
+				await _unitOfWork.SaveAllChangesAsync();
+				Success(string.Format(AdakCMS5.Resource.Text.SaveSuccess, AdakCMS5.Resource.Text.<#= ModelTypeName #>, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.Title), NewRecord.Title), true);
+				return RedirectToAction("Index",  new { area = "<#= AreaName #>" });
+            }
+			else
+			{
+				Danger(AdakCMS5.Resource.Text.SaveFailed, true);			
+				return View(InsertedRecord);
+			}
+        }
+
+
+
+
+
+<# if (UseAsync) { #>
+        public async Task<ActionResult> Edit(<#= primaryKeyNullableTypeName #> id)
+<# } else { #>
+        public async Task<ActionResult> Edit(<#= primaryKeyNullableTypeName #> id)
+<# } #>
+        {
+            if (id == null)
+            {
+				Danger(string.Format(AdakCMS5.Resource.Text.ToEditAddressRequired, AdakCMS5.Resource.Text.<#= ModelTypeName #>), true);
+				RedirectToAction("Index");
+            }
+<# if (UseAsync) { #>
+            <#= ModelTypeName #> <#= ModelVariable #> = await _<#= ModelTypeName #>Service.Get<#= ModelTypeName #>ByIdAsync(id.Value);
+<# } else { #>
+            <#= ModelTypeName #> <#= ModelVariable #> =_<#= ModelTypeName #>Service.Get<#= ModelTypeName #>ById(id.Value);
+<# } #>
+            if (<#= ModelVariable #> == null)
+            {
+			  Danger(string.Format(AdakCMS5.Resource.Text.RecordNotFound, AdakCMS5.Resource.Text.<#= ModelTypeName #>), true);
+			  return RedirectToAction("Index",  new { area = "<#= AreaName #>" });
+            }
+<# foreach (var property in relatedProperties.Values) {
+if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")&&(property.EntitySetName!="ManagerGallery")){ #>
+            ViewBag.<#= property.ForeignKeyPropertyNames[0] #> = new SelectList(await _<#= property.EntitySetName #>Service.GetAllForDropDown(), "<#= property.PrimaryKeyNames[0] #>", "<#= property.DisplayPropertyName #>", <#= ModelVariable #>.<#= property.ForeignKeyPropertyNames[0] #>);			
+<# } } #>
+            
+			var FindedRecordViewModel = new <#= ModelTypeName #>EditViewModel();
+            {
+            };
+            _mappingEngine.Map(<#= ModelVariable #>, FindedRecordViewModel);
+             
+			return View(FindedRecordViewModel);
+        }
+
+        
+
+
+
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+<# if (UseAsync) { #>
+        public async Task<ActionResult> Edit(<#= ModelTypeName #>EditViewModel EditedRecord)
+<# } else { #>
+        public ActionResult Edit(<#= ModelTypeName #>EditViewModel EditedRecord)
+<# } #>
+        {			
+		<# foreach (var property in relatedProperties.Values) { 
+if ((property.EntitySetName!="ApplicationUsers")&&(property.EntitySetName!="Users")){
+
+if(property.EntitySetName!="ManagerGallery"){ #>
+            ViewBag.<#= property.ForeignKeyPropertyNames[0] #> = new SelectList(await _<#= property.EntitySetName #>Service.GetAllForDropDown(), "<#= property.PrimaryKeyNames[0] #>", "<#= property.DisplayPropertyName #>", EditedRecord.<#= property.ForeignKeyPropertyNames[0] #>);			
+<# } }  else
+{ #>
+			try { ModelState["UserId"].Errors.Clear(); }catch { }
+<# } } #>           
+		<#	foreach (PropertyMetadata propertey in ModelMetadata.Properties) 
+		{
+			if (propertey.PropertyName.StartsWith("Uni"))
+                { 
+				HasAnyUniqe=1;
+				#>
+				if (_<#= ModelTypeName #>Service.AnyUniqeOtherMe(NewRecord.Id,"<#= propertey.PropertyName #>",InsertedRecord.<#= propertey.PropertyName #>.Tostring()))
+                 {
+                     Danger(string.Format(AdakCMS5.Resource.Text.IsDuplicate, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.<#= propertey.PropertyName #>)), true);
+                     return View(EditedRecord);
+                 }
+<# 
+				}
+				else if (propertey.PropertyName=="VisitUrl"){
+				HasAnyUniqe=1;
+				 #>                
+				if (_<#= ModelTypeName #>Service.AnyUniqeOtherMe(NewRecord.Id,"<#= propertey.PropertyName #>",InsertedRecord.<#= propertey.PropertyName #>.Tostring()))
+                {
+					Danger(string.Format(AdakCMS5.Resource.Text.IsDuplicate, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.<#= propertey.PropertyName #>)), true);
+                    return View(EditedRecord);
+                }
+				<#
+				} 	
+			} #>
+
+			var NewRecord = new <#= ModelTypeName #>();
+            {
+            };
+            _mappingEngine.Map(EditedRecord, NewRecord);
+
+			if (ModelState.IsValid)
+            {
+				_<#= ModelTypeName #>Service.Edit<#= ModelTypeName #>(NewRecord);
+				  await _unitOfWork.SaveAllChangesAsync();
+				Success(string.Format(AdakCMS5.Resource.Text.EditSuccess, AdakCMS5.Resource.Text.<#= ModelTypeName #>, ShareFunction.GetDisplayName((<#= ModelTypeName #> x) => x.Title), NewRecord.Title), true);
+                return RedirectToAction("Index",  new { area = "<#= AreaName #>" });
+            }
+
+           Danger(AdakCMS5.Resource.Text.EditFailed, true);
+           return View(EditedRecord);
+        }
+
+        #endregion DataEntry
+
+
+
+
+
+
+		#region webservice
+	 
+<# if (UseAsync) { #>
+        public async Task<ActionResult> Read<#= ModelTypeName #>(JqGridRequest request)
+<# } else { #>
+        public ActionResult Read<#= ModelTypeName #>s(JqGridRequest request)
+<# }
+ #>
+        {		
+            var pageIndex = request.page - 1;
+            var pageSize = request.rows;
+            var list = await _<#= ModelTypeName #>Service.GetDataGridSource(request.sidx + " " + request.sord,
+               request, Request.Form, DateTimeType.Persian, pageIndex, pageSize);
+
+            var totalRecords = list.TotalCount;
+            var totalPages = (int)Math.Ceiling(totalRecords / (float)pageSize);
+
+
+
+
+            //var <#= ModelTypeName #>Query = AllList.AsQueryable();
+            //<#= ModelTypeName #>Query = new JqGridSearch().ApplyFilter(<#= ModelTypeName #>Query, request, this.Request.Form);
+            //<#= ModelTypeName #>Query = <#= ModelTypeName #>Query.OrderBy(request.sidx + " " + request.sord);
+            //if (string.IsNullOrWhiteSpace(request.oper))
+            //{
+            //    <#= ModelTypeName #>Query = <#= ModelTypeName #>Query
+            //                        .Skip(pageIndex * pageSize)
+            //                        .Take(pageSize);
+            //}
+            ////else if (request.oper == "excel")
+            ////{
+            ////    <#= ModelTypeName #>Query = <#= ModelTypeName #>Query
+            ////                        .Skip(pageIndex * pageSize);
+            ////}
+			//
+            //var <#= ModelTypeName #>List = <#= ModelTypeName #>Query.ToList();
+            ////if (!string.IsNullOrWhiteSpace(request.oper) && request.oper == "excel")
+            ////{
+            ////    new <#= ModelTypeName #>sPdfReport().CreatePdfReport(<#= ModelTypeName #>List);
+            ////}
+
+
+            var jqGridData = new JqGridData
+            {
+                UserData = new // نمایش در فوتر
+                {
+                    Name = "جمع صفحه",
+                    Price = 0
+                },
+                Total = totalPages,
+                Page = request.page,
+                Records = totalRecords,
+                Rows = (list.Records.Select(XI => new JqGridRowData
+                {
+                    Id = XI.Id,
+                    RowCells = new List<object>
+                                                    {
+                                                        XI.Id.ToString(),
+														<# foreach(string properteyPropertyName in bindAttribute.Replace("[Bind(Include=\"",string.Empty).Replace("\")]",string.Empty).Split(','))
+			{
+				if (properteyPropertyName=="FullContent")
+				{ 
+				#>			
+				<#  
+				} 
+				else 
+					if (properteyPropertyName =="PictureId")
+					{
+					#>
+						XI.Picture.MainPictureName,			 
+					<#  
+					} 
+					else 						
+						{ 
+						#>
+						XI.<#= properteyPropertyName #>,						
+						<#
+						}
+				}
+						#>
+			            XI.Id.ToString()
+                        }
+                })).ToArray()
+            };
+            return Json(jqGridData, JsonRequestBehavior.AllowGet);						
+        }
+
+	
+	
+
+     <#	   if(HasOrder==1){#>
+	 
+		[AllowAnonymous]
+        [HttpPost]
+        public virtual JsonResult jChangeOrder(string id, string top)
+        {
+            int ii = int.Parse(id);
+            <#= ModelTypeName #> FindedItem = _<#= ModelTypeName #>Service.Get<#= ModelTypeName #>ById(ii);
+            if (FindedItem != null)
+            {
+				if(await _<#= ModelTypeName #>Service.ChangeShowOrder(FindedItem ,top== "true")==1)
+					return Json("none");
+                if (top == "true")
+                    return Json("top");
+                else
+                    return Json("down");
+            }
+            return Json("none");
+        }
+	<# }	#>
+		
+		
+		 
+        [HttpPost]
+        public virtual async Task<ActionResult>  JDelete(int id)
+        {
+			_<#= ModelTypeName #>Service.Delete<#= ModelTypeName #>(id);
+            await _unitOfWork.SaveAllChangesAsync();
+			return Json("با موفقیت حذف شد");	 
+		}
+		
+		
+		#endregion webservice
+
+
+
+		}
+		}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<# if (UseAsync) { #>
+using System.Threading.Tasks;
+<# } #>
+
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Service.Contracts;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.ViewModels;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Models;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.DataLayer;	
+
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
+using JqGridHelper.DynamicSearch;
+using JqGridHelper.Models;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Data.Entity;
+using System.Linq;
+using System.Web;
+using Utilities;
+
+namespace <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Service
+{
+
+public class  <#= ModelTypeName #>Service : I<#= ModelTypeName #>Service
+    {
+
+
+
+		#region Fields
+
+		private readonly IUnitOfWork _unitOfWork;
+        private readonly IMappingEngine _mappingEngine;
+        private readonly System.Data.Entity.IDbSet<<#= ModelTypeName #>> _<#= ModelTypeName #>s;
+
+       
+
+		#endregion
+
+
+
+        #region Constractor
+
+        public <#= ModelTypeName #>Service(IUnitOfWork unitOfWork, IMappingEngine mappingEngine)
+        {
+            _unitOfWork = unitOfWork;
+            _<#= ModelTypeName #>s = unitOfWork.Set<<#= ModelTypeName #>>();
+            _mappingEngine = mappingEngine;
+        }
+        
+        #endregion
+
+		#region Methods
+
+
+		public void Add<#= ModelTypeName #>(<#= ModelTypeName #> <#= ModelTypeName #>)
+        {
+            if (<#= ModelTypeName #> == null)
+                throw new ArgumentNullException("<#= ModelTypeName #>");
+			 
+            _<#= ModelTypeName #>s.Add(<#= ModelTypeName #>);
+        }
+
+
+
+
+		public async Task<IList<<#= ModelTypeName #>>> GetAll<#= ModelTypeName #>sNonPaged()
+        {
+			//var query = _<#= ModelTypeName #>s.Table;
+			//if(ProductGroupId!=0)
+            //{
+			// query = query.Where(n => n.ProductGroupId== ProductGroupId);
+			//}
+			
+            return await _<#= ModelTypeName #>s.ToListAsync();
+        }
+
+				 
+
+		public async Task<DataGridViewModel<<#= ModelTypeName #>DataGridViewModel>> GetDataGridSource(string orderBy, JqGridRequest request, NameValueCollection form, DateTimeType dateTimeType,
+            int page, int pageSize)
+        {
+            var query = _<#= ModelTypeName #>s.AsQueryable();
+
+            query = new JqGridSearch(request, form, dateTimeType).ApplyFilter(query);
+
+            var dataGridModel = new DataGridViewModel<<#= ModelTypeName #>DataGridViewModel>
+            {
+                Records = await query.AsQueryable().OrderByt(orderBy)
+                    .Skip(page * pageSize)
+                    .Take(pageSize).ProjectTo<<#= ModelTypeName #>DataGridViewModel>(null, _mappingEngine).ToListAsync(),
+
+                TotalCount = await query.AsQueryable().OrderByt(orderBy).CountAsync()
+            };
+
+            return dataGridModel;
+        }
+
+
+ 
+
+		public void Delete<#= ModelTypeName #>(int id)
+        {
+          //  if (<#= ModelTypeName #>Item == null)
+           //     throw new ArgumentNullException("<#= ModelTypeName #>");
+		     var entity = new <#= ModelTypeName #> { Id = id };
+            _<#= ModelTypeName #>s.Attach(entity);
+            _<#= ModelTypeName #>s.Remove(entity);
+
+             
+        }
+
+        public void Delete<#= ModelTypeName #>s(List<int>  <#= ModelTypeName #>ItemIds)
+        {
+			foreach(int i in <#= ModelTypeName #>ItemIds)
+						Delete<#= ModelTypeName #>(i);
+        }
+
+        
+     
+       	public void Edit<#= ModelTypeName #>(<#= ModelTypeName #> <#= ModelTypeName #>)
+        {
+            if (<#= ModelTypeName #> == null)
+                throw new ArgumentNullException("<#= ModelTypeName #>");
+
+			_<#= ModelTypeName #>s.Attach(<#= ModelTypeName #>);
+            _unitOfWork.Entry(<#= ModelTypeName #>).State = System.Data.Entity.EntityState.Modified;
+        }
+
+
+
+        public async Task<<#= ModelTypeName #>> Get<#= ModelTypeName #>ByIdAsync(int <#= ModelTypeName #>Id)
+        {
+            //if (<#= ModelTypeName #>Id == Guid.Empty)
+           //     return null;
+
+            return await _<#= ModelTypeName #>s.SingleOrDefaultAsync(s=>s.Id==<#= ModelTypeName #>Id);
+        }
+
+        
+
+       
+
+<#	   if(HasOrder==1){#>
+		 public async Task<int> ChangeShowOrder(<#= ModelTypeName #> Record, bool IsTop)
+        {
+            int newid;
+            <#= ModelTypeName #> newRecord;
+            if (IsTop)
+            {//رشد
+                newRecord = _<#= ModelTypeName #>.Where(f => f.ShowOrder < Record.ShowOrder).OrderByDescending(f => f.ShowOrder).FirstOrDefault();
+                    if (newRecord != null)
+                {
+                    newid = newRecord.ShowOrder;
+                    newRecord.ShowOrder = Record.ShowOrder;
+                    Record.ShowOrder = newid;
+                }
+                else
+                {
+                    Record.ShowOrder = 1;
+                }
+            }
+            else
+            {
+                 newRecord = _<#= ModelTypeName #>.Where(f => f.ShowOrder > Record.ShowOrder).OrderBy(f => f.ShowOrder).FirstOrDefault();
+                if (newRecord != null)
+                {
+                    newid = newRecord.ShowOrder;
+                    newRecord.ShowOrder = Record.ShowOrder;
+                    Record.ShowOrder = newid;
+                }
+                else
+                {
+                    return 1;
+                }
+            }
+            if (Record.ShowOrder < 1)
+                Record.ShowOrder = 1;
+            try
+            {
+                Edit<#= ModelTypeName #>(Record);
+                Edit<#= ModelTypeName #>(newRecord);
+				await _unitOfWork.SaveAllChangesAsync();
+            }
+            catch { return 1;}
+			return 0;
+
+        }
+
+	
+		<# }#>
+
+		
+		<#	   if(HasAnyUniqe==1){#>
+
+		 public bool AnyUniqe(string UniqueFiledName, string UniqueValue)
+        {
+            if (UniqueFiledName == "VisitUrl")
+            {
+                return _<#= ModelTypeName #>s.Any(s => s.VisitUrl == UniqueValue);
+            }
+            return true;
+        }	
+
+		public bool AnyUniqeOtherMe(id,string UniqueFiledName, string UniqueValue)
+        {
+            if (UniqueFiledName == "VisitUrl")
+            {
+                return _<#= ModelTypeName #>s.Any(s =>s.Id!=id && s.VisitUrl == UniqueValue);
+            }
+            return true;
+        }
+		<# }#>
+
+		 
+		  #endregion
+
+       
+    }
+}
+
+
+
+
+
+
+
+
+
+<# if (UseAsync) { #>
+using System.Threading.Tasks;
+<# } #>
+
+ 
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.ViewModels;
+using <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Models;
+ 	
+using JqGridHelper.DynamicSearch;
+using JqGridHelper.Models;
+using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+
+
+namespace <#= Namespace.Substring(0,Namespace.IndexOf(".")) #>.Service.Contracts
+{
+
+public interface    I<#= ModelTypeName #>Service
+    {
+
+
+
+		#region Methods
+
+
+		void Add<#= ModelTypeName #>(<#= ModelTypeName #> <#= ModelTypeName #>);
+        
+
+		Task<IList<<#= ModelTypeName #>>> GetAll<#= ModelTypeName #>sNonPaged();
+        
+		Task<DataGridViewModel<<#= ModelTypeName #>DataGridViewModel>> GetDataGridSource(string orderBy, JqGridRequest request, NameValueCollection form, DateTimeType dateTimeType,
+            int page, int pageSize);
+        
+		void Delete<#= ModelTypeName #>(int id);
+        
+
+        void Delete<#= ModelTypeName #>s(List<int>  <#= ModelTypeName #>ItemIds);
+                
+     
+       	void Edit<#= ModelTypeName #>(<#= ModelTypeName #> <#= ModelTypeName #>);
+        
+
+        Task<<#= ModelTypeName #>> Get<#= ModelTypeName #>ByIdAsync(int <#= ModelTypeName #>Id);
+               
+
+<#	   if(HasOrder==1){#>
+		Task<int> ChangeShowOrder(<#= ModelTypeName #> Record, bool IsTop);	
+		<# }#>
+
+		
+		<#	   if(HasAnyUniqe==1){#>
+
+		 bool AnyUniqe(string UniqueFiledName, string UniqueValue);
+        
+
+		bool AnyUniqeOtherMe(id,string UniqueFiledName, string UniqueValue);
+        
+		<# }#>
+	  #endregion
+
+       
+    }
+}
+<#+
+// This function converts the primary key short type name to its nullable equivalent when possible. This is required to make
+// sure that an HTTP 400 error is thrown when the user tries to access the edit, delete, or details action with null values.
+    string GetNullableTypeName(string typeName, string shortTypeName)
+    {
+        // The exceptions are caught because if for any reason the type is user defined, then the short type name will be used.
+        // In that case the user will receive a server error if null is passed to the edit, delete, or details actions.
+        Type primaryKeyType = null;
+        try
+        {
+            primaryKeyType = Type.GetType(typeName);
+        }
+        catch
+        {
+        }
+        if (primaryKeyType != null && (primaryKeyType.IsPrimitive || IsGuid(typeName)))
+        {
+            return shortTypeName + "?";
+        }
+        return shortTypeName;
+    }
+
+    bool IsGuid(string typeName) {
+        return String.Equals("System.Guid", typeName, StringComparison.OrdinalIgnoreCase);
+    }
+#>

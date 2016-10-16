@@ -1,0 +1,150 @@
+﻿<#@ template language="C#" HostSpecific="True" #>
+<#@ output extension=".cshtml" #>
+<#@ include file="Imports.include.t4" #>
+@model <#= ViewDataTypeName #>
+<#
+// The following chained if-statement outputs the file header code and markup for a partial view, a view using a layout page, or a regular view.
+
+
+string MyViewDataTypeName=ViewDataTypeName.Substring(ViewDataTypeName.LastIndexOf(".")+1);
+
+
+if(IsPartialView) {
+#>
+
+<#
+} else if(IsLayoutPageSelected) {
+#>
+
+@{
+    ViewBag.Title = string.Format(AdakCMS5.Resource.Text.DeleteTitle,AdakCMS5.Resource.Text.<#= MyViewDataTypeName #>);
+<#
+if (!String.IsNullOrEmpty(LayoutPageFile)) {
+#>
+    Layout = "<#= LayoutPageFile#>";
+<#
+}
+#>
+}
+
+<h2><i class="fa fa-trash-o fa-lg"></i>  @ViewBag.Title</h2>
+
+<#
+} else {
+#>
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title><#= ViewName #></title>
+</head>
+<body>
+<#
+    PushIndent("    ");
+}
+#>
+
+<h3>@string.Format(AdakCMS5.Resource.Text.AreYouSure,@ViewBag.Title)</h3>
+
+@using (Html.BeginForm()) {
+    @Html.AntiForgeryToken()
+<div>
+    <div class="form-actions no-color col-md-offset-3 col-md-6 text-right">
+        <button type="submit" class="btn btn-default">
+            <i class="fa fa-trash-o fa-lg"></i> @AdakCMS5.Resource.Text.Delete
+        </button>
+
+
+
+
+        <a href="@Url.Action("Index")" class="btn btn-default">
+            <i class="fa  fa-reply fa-lg"></i>
+           @string.Format(AdakCMS5.Resource.Text.BackToList,AdakCMS5.Resource.Text.<#= MyViewDataTypeName #>)
+        </a>
+    </div>
+    <div class="Eshtekhdami"></div>
+    <hr style="width:70%" />
+
+    <dl class="dl-horizontal">
+<#
+foreach (PropertyMetadata property in ModelMetadata.Properties) {
+    if (property.Scaffold && !property.IsPrimaryKey && !property.IsForeignKey) {
+#>
+<#
+        // This is a temporary work around until core scaffolding provides support for independent associations.
+        if (property.IsAssociation && GetRelatedModelMetadata(property) == null) {
+            continue;
+        }
+#>
+        <dt>
+            @Html.DisplayNameFor(model => model.<#= GetValueExpression(property) #>)
+        </dt>
+
+        <dd>
+		<#
+		if (GetAssociationName(property).Contains("FullContent"))
+					{					
+		#>
+			@Html.Raw(HttpUtility.HtmlDecode(Model.<#= GetValueExpression(property) #>))
+			<#
+			}
+			else if (GetAssociationName(property).Contains ("Picture"))
+			{
+			#>
+			<img width="50%" src='~/content/upload/images/@Html.DisplayFor(model => model.<#= GetValueExpression(property) #>)' />            
+			<# 
+			} 
+			else
+			{
+			#>
+            @Html.DisplayFor(model => model.<#= GetValueExpression(property) #>)
+			<# } #>
+        </dd>
+
+<#
+    }
+}
+#>
+    </dl>
+
+   
+
+        <hr style="width:70%" />
+         <div class="form-actions no-color col-md-offset-3 col-md-6 text-right">
+        <button type="submit" class="btn btn-default">
+            <i class="fa fa-trash-o fa-lg"></i> @AdakCMS5.Resource.Text.Delete
+        </button>
+
+
+
+
+
+        <a href='@Url.Action("Index")' class="btn btn-default">
+            <i class="fa  fa-reply fa-lg"></i>
+            @string.Format(AdakCMS5.Resource.Text.BackToList,AdakCMS5.Resource.Text.<#= MyViewDataTypeName #>)
+        </a>
+    </div>
+    
+</div>
+}
+
+
+<#
+// The following code closes the tag used in the case of a view using a layout page and the body and html tags in the case of a regular view page
+#>
+<#
+if(!IsPartialView && !IsLayoutPageSelected) {
+    ClearIndent();
+#>
+</body>
+</html>
+<#
+}
+#>
+<#@ include file="ModelMetadataFunctions.cs.include.t4" #>
